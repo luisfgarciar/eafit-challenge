@@ -2,7 +2,7 @@
 
 **Verana Foundation × NODO EAFIT — Beca IA Ser ANDI**
 
-[Visual presentation](./Reto-IA-Generativa-Agentes-IA-Verificables-con-Hologram.pdf) | [Versión en español](./README-es.md)
+[Visual presentation](./Generative-AIAI-Verificable-Agents-with-MCP-and-Hologram-Messaging.pdf) | [Versión en español](./README-es.md)
 
 ---
 
