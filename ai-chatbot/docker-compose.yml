@@ -1,0 +1,128 @@
+services:
+
+  # ── AI Chatbot ────────────────────────────────────────────────────────────
+  chatbot:
+    build: .
+    container_name: hologram-generic-ai-agent
+    depends_on:
+      - redis
+      - artemis
+    ports:
+      - "${APP_PORT:-3000}:${APP_PORT:-3000}"
+    volumes:
+      - ./agent-packs:/app/agent-packs
+      - ./docs:/app/rag/docs
+    environment:
+      # App
+      APP_PORT: ${APP_PORT:-3000}
+      LOG_LEVEL: ${LOG_LEVEL:-3}
+      AGENT_PACK_PATH: ${AGENT_PACK_PATH:-./agent-packs/my-agent}
+      # LLM
+      LLM_PROVIDER: ${LLM_PROVIDER}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL}
+      OPENAI_TEMPERATURE: ${OPENAI_TEMPERATURE:-0.3}
+      OPENAI_MAX_TOKENS: ${OPENAI_MAX_TOKENS:-1000}
+      # Ollama (alternative to OpenAI)
+      OLLAMA_ENDPOINT: ${OLLAMA_ENDPOINT}
+      OLLAMA_MODEL: ${OLLAMA_MODEL}
+      # Anthropic (alternative)
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL}
+      # Memory
+      AGENT_MEMORY_BACKEND: ${AGENT_MEMORY_BACKEND:-redis}
+      AGENT_MEMORY_WINDOW: ${AGENT_MEMORY_WINDOW:-8}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      # RAG / Vector store
+      RAG_PROVIDER: ${RAG_PROVIDER:-vectorstore}
+      RAG_DOCS_PATH: ${RAG_DOCS_PATH:-/app/rag/docs}
+      VECTOR_STORE: ${VECTOR_STORE:-redis}
+      VECTOR_INDEX_NAME: ${VECTOR_INDEX_NAME:-eafit-chatbot}
+      # VS Agent integration
+      VS_AGENT_ADMIN_URL: ${VS_AGENT_ADMIN_URL:-http://vs-agent:3001}
+      EVENTS_BASE_URL: ${EVENTS_BASE_URL:-http://chatbot:3000}
+      # PostgreSQL
+      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER:-eafit}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-eafit2025}
+      POSTGRES_DB_NAME: ${POSTGRES_DB_NAME:-chatbot-agent}
+    networks:
+      - chatbot
+    restart: unless-stopped
+
+  # ── VS Agent (DIDComm ↔ Hologram) ─────────────────────────────────────────
+  vs-agent:
+    image: io2060/vs-agent:v1.5.5
+    container_name: vs-agent
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - "3001:3001"   # DIDComm / public endpoint (expose via ngrok in dev)
+    environment:
+      AGENT_ENDPOINT: ${AGENT_ENDPOINT}         # Set to your ngrok URL (https://xxx.ngrok-free.app)
+      EVENTS_BASE_URL: ${EVENTS_BASE_URL:-http://chatbot:3000}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER:-eafit}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-eafit2025}
+      POSTGRES_DB_NAME: ${POSTGRES_DB_NAME:-chatbot-agent}
+    networks:
+      - chatbot
+    restart: unless-stopped
+
+  # ── Redis (memory + vector store) ─────────────────────────────────────────
+  redis:
+    image: redis/redis-stack-server:latest
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - chatbot
+    restart: unless-stopped
+
+  # ── PostgreSQL (session storage) ──────────────────────────────────────────
+  postgres:
+    image: postgres:alpine3.19
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-eafit}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-eafit2025}
+      POSTGRES_DB: ${POSTGRES_DB_NAME:-chatbot-agent}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - chatbot
+    restart: unless-stopped
+
+  # ── Artemis (message broker, required by chatbot) ─────────────────────────
+  artemis:
+    image: apache/activemq-artemis:2.31.2
+    container_name: artemis
+    ports:
+      - "8161:8161"   # Web console (admin UI)
+    networks:
+      - chatbot
+    restart: unless-stopped
+
+  # ── Adminer (optional DB UI for development) ──────────────────────────────
+  adminer:
+    image: adminer
+    container_name: adminer
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    networks:
+      - chatbot
+    profiles:
+      - dev   # only starts with: docker compose --profile dev up
+
+volumes:
+  postgres_data:
+
+networks:
+  chatbot:
+    driver: bridge
