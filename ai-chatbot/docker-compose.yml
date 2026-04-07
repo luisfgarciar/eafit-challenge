@@ -40,7 +40,7 @@ services:
       VECTOR_STORE: ${VECTOR_STORE:-redis}
       VECTOR_INDEX_NAME: ${VECTOR_INDEX_NAME:-eafit-chatbot}
       # VS Agent integration
-      VS_AGENT_ADMIN_URL: ${VS_AGENT_ADMIN_URL:-http://vs-agent:3001}
+      VS_AGENT_ADMIN_URL: ${VS_AGENT_ADMIN_URL:-http://vs-agent:3000}
       EVENTS_BASE_URL: ${EVENTS_BASE_URL:-http://chatbot:3000}
       # Stats (Artemis JMS broker)
       VS_AGENT_STATS_ENABLED: ${VS_AGENT_STATS_ENABLED:-true}
@@ -69,6 +69,7 @@ services:
       - "3001:3001"   # DIDComm / public endpoint (expose via ngrok in dev)
       - "3002:3000"   # vs-agent admin API (QR code, invitation, agent status)
     environment:
+      AGENT_LABEL: ${AGENT_LABEL:-EAFIT AI Assistant}
       AGENT_ENDPOINTS: ${AGENT_ENDPOINT}        # v1.5.5+ uses AGENT_ENDPOINTS (plural)
       AGENT_ENDPOINT: ${AGENT_ENDPOINT}         # kept for backwards compatibility
       EVENTS_BASE_URL: ${EVENTS_BASE_URL:-http://chatbot:3000}
