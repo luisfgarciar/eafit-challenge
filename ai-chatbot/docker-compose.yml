@@ -26,6 +26,7 @@ services:
       # Ollama (alternative to OpenAI)
       OLLAMA_ENDPOINT: ${OLLAMA_ENDPOINT}
       OLLAMA_MODEL: ${OLLAMA_MODEL}
+      OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
       # Anthropic (alternative)
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL}
@@ -41,6 +42,13 @@ services:
       # VS Agent integration
       VS_AGENT_ADMIN_URL: ${VS_AGENT_ADMIN_URL:-http://vs-agent:3001}
       EVENTS_BASE_URL: ${EVENTS_BASE_URL:-http://chatbot:3000}
+      # Stats (Artemis JMS broker)
+      VS_AGENT_STATS_ENABLED: ${VS_AGENT_STATS_ENABLED:-true}
+      VS_AGENT_STATS_HOST: ${VS_AGENT_STATS_HOST:-artemis}
+      VS_AGENT_STATS_PORT: ${VS_AGENT_STATS_PORT:-61616}
+      VS_AGENT_STATS_QUEUE: ${VS_AGENT_STATS_QUEUE:-stats-queue}
+      VS_AGENT_STATS_USER: ${VS_AGENT_STATS_USER:-artemis}
+      VS_AGENT_STATS_PASSWORD: ${VS_AGENT_STATS_PASSWORD:-artemis}
       # PostgreSQL
       POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
       POSTGRES_USER: ${POSTGRES_USER:-eafit}
@@ -59,8 +67,10 @@ services:
       - redis
     ports:
       - "3001:3001"   # DIDComm / public endpoint (expose via ngrok in dev)
+      - "3002:3000"   # vs-agent admin API (QR code, invitation, agent status)
     environment:
-      AGENT_ENDPOINT: ${AGENT_ENDPOINT}         # Set to your ngrok URL (https://xxx.ngrok-free.app)
+      AGENT_ENDPOINTS: ${AGENT_ENDPOINT}        # v1.5.5+ uses AGENT_ENDPOINTS (plural)
+      AGENT_ENDPOINT: ${AGENT_ENDPOINT}         # kept for backwards compatibility
       EVENTS_BASE_URL: ${EVENTS_BASE_URL:-http://chatbot:3000}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
@@ -97,6 +107,18 @@ services:
       - chatbot
     restart: unless-stopped
 
+  # ── Ollama (local LLM, containerized to avoid conflict with host port 11434)
+  ollama-svr:
+    image: ollama/ollama:latest
+    container_name: ollama-docker
+    ports:
+      - "11435:11434"   # external 11435 → internal 11434
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - chatbot
+    restart: unless-stopped
+
   # ── Artemis (message broker, required by chatbot) ─────────────────────────
   artemis:
     image: apache/activemq-artemis:2.31.2
@@ -122,6 +144,7 @@ services:
 
 volumes:
   postgres_data:
+  ollama_data:
 
 networks:
   chatbot:

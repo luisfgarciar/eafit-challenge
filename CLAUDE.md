@@ -1,5 +1,28 @@
 # CLAUDE.md — EAFIT Challenge: Verifiable AI Agents with Hologram
 
+## Progress
+
+### Step 1 — AI Chatbot
+- [x] 1.1. Fork the repository
+- [x] 1.2. Clone the repository
+- [x] 1.3. Explore the project structure
+- [x] 1.4. Configure environment variables (`.env` created, Ollama configured)
+- [x] 1.5. Customize Agent Pack (`llm.model` updated to `${OLLAMA_MODEL}`)
+- [x] 1.6. Add documents for RAG (bilingual docs already in `docs/`)
+- [x] 1.7. Start the chatbot with Docker Compose (pinned to v1.9.0, patched StatProducerService + Ollama RAG)
+- [x] 1.8. Expose with ngrok (`https://queasier-jaimie-gravimetrically.ngrok-free.dev` → port 3001)
+- [x] 1.9. Get invitation credentials (`http://localhost:3002/v1/invitation` and `http://localhost:3002/v1/qr`)
+- [x] 1.10. Connect with Hologram and test (QR at `http://localhost:3002/v1/qr`)
+- [x] 1.11. Commit changes
+
+### Step 2 — Kubernetes
+- [ ] Not started
+
+### Step 3 — Web Application
+- [ ] Not started
+
+---
+
 ## Project Overview
 
 This is the **Verana Foundation × NODO EAFIT** challenge repository. The goal is to build a platform for creating **Persona AI Agents** — verifiable AI bots accessible through [Hologram Messaging](https://hologram.zone), backed by decentralized identity (DIDs + W3C Verifiable Credentials).
@@ -18,39 +41,53 @@ The challenge has 3 deliverables:
 
 ```
 eafit-challenge/
-├── ai-chatbot/          # Step 1 — chatbot (hologram-generic-ai-agent-vs based)
-│   ├── agent-packs/     # Declarative YAML agent configs (prompts, RAG, LLM)
-│   ├── docs/            # RAG knowledge base documents (.txt, .md, .pdf, .csv)
-│   ├── docker-compose.yml
-│   ├── .env.example
-│   └── Dockerfile
-├── k8s/                 # Step 2 — Kubernetes manifests
+├── ai-chatbot/                          # Step 1 — chatbot (hologram-generic-ai-agent-vs based)
+│   ├── agent-packs/
+│   │   └── my-agent/
+│   │       └── agent-pack.yaml          # Bot personality, prompts, RAG, memory config
+│   ├── docs/                            # RAG knowledge base documents
+│   │   ├── eafit-university-en.txt      # EAFIT info in English (location, history, contact…)
+│   │   └── eafit-universidad-es.txt     # EAFIT info in Spanish
+│   ├── docker-compose.yml               # 5 services: chatbot, vs-agent, redis, postgres, artemis
+│   ├── .env.example                     # All env vars documented (3 LLM options)
+│   ├── .gitignore                       # Ignores .env and data/
+│   └── Dockerfile                       # Multi-stage: clones upstream at build time
+├── k8s/                                 # Step 2 — Kubernetes manifests (to be created)
 │   ├── deployment.yaml
 │   ├── service.yaml
 │   ├── ingress.yaml
 │   ├── configmap.yaml
 │   ├── secrets.yaml
 │   └── deploy.sh
-├── web-app/             # Step 3 — Persona AI Agent Creator (to be built)
-│   ├── frontend/        # React / Next.js
-│   ├── backend/         # Node.js / Express / NestJS
+├── web-app/                             # Step 3 — Persona AI Agent Creator (to be built)
+│   ├── frontend/                        # React / Next.js
+│   ├── backend/                         # Node.js / Express / NestJS
 │   └── Dockerfile
-└── .github/workflows/   # CI/CD (bonus Step 3.7)
+└── .github/workflows/                   # CI/CD (bonus Step 3.7)
     └── deploy.yml
 ```
 
-> `web-app/` does not exist yet — it must be created as part of Step 3.
+> `k8s/` and `web-app/` do not exist yet — to be created in Steps 2 and 3.
 
 ---
 
 ## Tech Stack
 
 ### Step 1 — AI Chatbot
-- Runtime: **Node.js v20+**, **pnpm**
-- Config: `agent-pack.yaml` (YAML, supports `${ENV_VAR}` interpolation)
-- LLM providers: OpenAI (`gpt-4o-mini`), Anthropic (`claude-3-haiku`), Ollama (`llama3`)
-- Infrastructure: Docker Compose — services: `chatbot:3000`, `vs-agent:3001`, `redis:6379`, `postgres:5432`
+- Runtime: **Node.js v23-alpine** (upstream), **pnpm**
+- Config: `agent-pack.yaml` (YAML, supports `${ENV_VAR}` interpolation at runtime)
+- LLM providers: OpenAI (`gpt-4o-mini`), Anthropic (`claude-haiku-4-5-20251001`), Ollama (`llama3`)
+- Infrastructure: Docker Compose (5 services):
+  - `chatbot:3000` — AI agent API (built from local Dockerfile)
+  - `vs-agent:3001` — DIDComm ↔ Hologram (`io2060/vs-agent:v1.5.5`)
+  - `redis` — memory + vector store (`redis/redis-stack-server:latest`)
+  - `postgres:5432` — session storage (`postgres:alpine3.19`)
+  - `artemis` — message broker (`apache/activemq-artemis:2.31.2`)
+  - `adminer:8080` — DB UI, dev-only (start with `--profile dev`)
+- Dockerfile: multi-stage, clones upstream at build time (`git clone 2060-io/hologram-generic-ai-agent-vs`)
+- Volumes: `./agent-packs` and `./docs` mounted into container at `/app/agent-packs` and `/app/rag/docs`
 - Tunnel for local dev: **ngrok** (exposes port 3001 to Hologram)
+- RAG docs: `docs/eafit-university-en.txt` and `docs/eafit-universidad-es.txt` (bilingual knowledge base)
 
 ### Step 2 — Kubernetes
 - Tool: `kubectl`
@@ -101,19 +138,33 @@ An agent that represents a person and acts on their behalf (e.g., a plumber's bo
 
 ```bash
 cd ai-chatbot
-cp .env.example .env        # configure LLM keys, etc.
-docker compose up --build   # start all services
-ngrok http 3001              # expose vs-agent publicly (separate terminal)
-curl http://localhost:3001/  # get QR code / invitation URL
+cp .env.example .env              # configure LLM provider and API key
+# edit .env: set LLM_PROVIDER, OPENAI_API_KEY (or ANTHROPIC/OLLAMA)
+docker compose up --build         # first run takes a few minutes (clones upstream)
+# in a separate terminal:
+ngrok http 3001                   # copy the https URL
+# update .env: AGENT_ENDPOINT=https://xxx.ngrok-free.app
+docker compose down && docker compose up --build
+curl http://localhost:3001/       # get QR code / invitation URL for Hologram
+
+# dev extras:
+docker compose --profile dev up   # also starts adminer at localhost:8080
+docker compose ps                 # verify all services are Running
+docker compose logs chatbot -f    # tail chatbot logs
 ```
 
-### Step 2 — Kubernetes Deploy
+### Step 2 — Kubernetes Deploy (local with Docker Desktop)
 
 ```bash
-export KUBECONFIG=~/path/to/kubeconfig.yaml
+# Enable Kubernetes in Docker Desktop → Settings → Kubernetes
+kubectl get nodes                          # verify local cluster
+kubectl apply -f k8s/
 kubectl get pods -n eafit-YOURNAME
-cd k8s && ./deploy.sh
 kubectl rollout status deployment -n eafit-YOURNAME
+
+# On Verana cluster (when credentials arrive):
+export KUBECONFIG=~/path/to/kubeconfig.yaml
+cd k8s && ./deploy.sh
 ```
 
 ### Step 3 — Web App (to be implemented)

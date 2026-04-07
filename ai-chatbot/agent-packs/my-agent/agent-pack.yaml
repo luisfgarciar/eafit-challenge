@@ -34,7 +34,7 @@ languages:
 
 llm:
   provider: ${LLM_PROVIDER}
-  model: ${OPENAI_MODEL}
+  model: ${OLLAMA_MODEL}
   temperature: 0.3
   maxTokens: 1000
 
