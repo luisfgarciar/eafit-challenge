@@ -197,3 +197,58 @@ Verify the agent initialized correctly:
 curl http://localhost:3002/v1/agent
 # Expected: {"isInitialized":true, "endpoints":["https://abc123.ngrok-free.app"], ...}
 ```
+
+---
+
+## Issue 9 — "Service unavailable. Please try again later." on every message
+
+**Error (in Hologram):**
+```
+Service unavailable. Please try again later.
+```
+
+**Error (in chatbot logs):**
+```
+[LlmService] [LLM LANG DETECT] Error: TypeError: fetch failed
+[LlmService] Error during agent response generation: fetch failed
+[CoreService] handleStateInput: Error: Failed to generate agent response.
+```
+
+**Root cause:**  
+A key mismatch in the upstream LLM service code:
+- `app.config.js` reads `process.env.OLLAMA_ENDPOINT` and stores it as `appConfig.ollamaEndpoint`
+- `llm.service.js` reads `appConfig.ollamaBaseUrl` (different key) — so it always gets `undefined`
+- The fallback value is hardcoded to `http://ollama:11434`
+- The Docker Compose service is named `ollama-svr`, not `ollama`, so the fallback hostname never resolves
+
+Setting `OLLAMA_ENDPOINT=http://ollama-svr:11434` in `.env` has no effect because the config key mismatch means the env var is never used by the LLM client.
+
+**Fix:**  
+Add `ollama` as a network alias to the `ollama-svr` service in `docker-compose.yml` so the hardcoded fallback URL resolves correctly:
+
+```yaml
+ollama-svr:
+  image: ollama/ollama:latest
+  container_name: ollama-docker
+  ports:
+    - "11435:11434"
+  volumes:
+    - ollama_data:/root/.ollama
+  networks:
+    chatbot:
+      aliases:
+        - ollama   # matches the hardcoded fallback in llm.service.js
+  restart: unless-stopped
+```
+
+Then recreate the container:
+```bash
+docker compose up -d ollama-svr
+docker compose restart chatbot
+```
+
+**Verify:**
+```bash
+docker exec hologram-generic-ai-agent wget -qO- http://ollama:11434/api/tags
+# Expected: {"models":[{"name":"llama3:latest", ...}]}
+```

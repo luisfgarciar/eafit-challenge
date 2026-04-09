@@ -117,7 +117,9 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     networks:
-      - chatbot
+      chatbot:
+        aliases:
+          - ollama   # matches the hardcoded fallback in llm.service.js
     restart: unless-stopped
 
   # ── Artemis (message broker, required by chatbot) ─────────────────────────

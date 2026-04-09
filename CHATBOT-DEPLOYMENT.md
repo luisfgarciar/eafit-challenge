@@ -170,6 +170,22 @@ curl http://localhost:3002/v1/invitation
 
 ---
 
+## When to use `--build` vs `-d`
+
+You do **not** need to rebuild the image on every restart. Use the right command for what changed:
+
+| What changed | Command |
+|---|---|
+| `Dockerfile` | `docker compose up --build -d` |
+| `package.json` / Node dependencies | `docker compose up --build -d` |
+| `.env` variables | `docker compose up -d` |
+| `agent-pack.yaml` (prompt, persona, RAG config) | `docker compose restart chatbot` |
+| Files in `docs/` (RAG knowledge base) | `docker compose restart chatbot` |
+
+**Why:** `agent-packs/` and `docs/` are bind-mounted into the container — the running process reads them directly from your host filesystem. Changes take effect on the next restart without any image rebuild. Only changes to the image layers (Dockerfile, dependencies, copied source) require `--build`.
+
+---
+
 ## Customization
 
 | File | What to change |
