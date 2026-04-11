@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chatbot-config
+  namespace: eafit-luisgarcia
+data:
+  # Application
+  APP_PORT: "3000"
+  LOG_LEVEL: "3"
+  AGENT_PACK_PATH: "./agent-packs/my-agent"
+
+  # LLM
+  LLM_PROVIDER: "anthropic"
+  ANTHROPIC_MODEL: "claude-haiku-4-5-20251001"
+
+  # VS Agent
+  AGENT_LABEL: "EAFIT AI Assistant"
+  AGENT_ENDPOINT: "https://myagent.luisgarcia.eafit.testnet.verana.network"
+  AGENT_ENDPOINTS: "https://myagent.luisgarcia.eafit.testnet.verana.network"
+  VS_AGENT_ADMIN_URL: "http://vs-agent:3000"
+  EVENTS_BASE_URL: "http://chatbot:3000"
+
+  # Redis
+  REDIS_URL: "redis://redis:6379"
+  AGENT_MEMORY_BACKEND: "redis"
+  AGENT_MEMORY_WINDOW: "8"
+
+  # RAG
+  RAG_PROVIDER: "vectorstore"
+  RAG_DOCS_PATH: "/app/rag/docs"
+  VECTOR_STORE: "redis"
+  VECTOR_INDEX_NAME: "eafit-chatbot"
+
+  # Stats (Artemis)
+  VS_AGENT_STATS_ENABLED: "true"
+  VS_AGENT_STATS_HOST: "artemis"
+  VS_AGENT_STATS_PORT: "61616"
+  VS_AGENT_STATS_QUEUE: "stats-queue"
+  VS_AGENT_STATS_USER: "artemis"
+
+  # PostgreSQL
+  POSTGRES_HOST: "postgres"
+  POSTGRES_USER: "eafit"
+  POSTGRES_DB_NAME: "chatbot-agent"

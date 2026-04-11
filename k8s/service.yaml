@@ -1,0 +1,72 @@
+# ── Chatbot ───────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: chatbot
+  namespace: eafit-luisgarcia
+spec:
+  selector:
+    app: chatbot
+  ports:
+    - port: 3000
+      targetPort: 3000
+---
+# ── VS Agent ──────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: vs-agent
+  namespace: eafit-luisgarcia
+spec:
+  selector:
+    app: vs-agent
+  ports:
+    - name: didcomm
+      port: 3001
+      targetPort: 3001
+    - name: admin
+      port: 3000
+      targetPort: 3000
+---
+# ── Redis ─────────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: eafit-luisgarcia
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+---
+# ── PostgreSQL ────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: eafit-luisgarcia
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+---
+# ── Artemis ───────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: artemis
+  namespace: eafit-luisgarcia
+spec:
+  selector:
+    app: artemis
+  ports:
+    - name: stomp
+      port: 61616
+      targetPort: 61616
+    - name: console
+      port: 8161
+      targetPort: 8161
