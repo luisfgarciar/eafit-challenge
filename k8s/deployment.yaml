@@ -1,0 +1,189 @@
+# ── Chatbot ───────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chatbot
+  namespace: eafit-luisgarcia
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chatbot
+  template:
+    metadata:
+      labels:
+        app: chatbot
+    spec:
+      containers:
+        - name: chatbot
+          image: eafit-chatbot:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: chatbot-config
+            - secretRef:
+                name: chatbot-secrets
+          volumeMounts:
+            - name: agent-packs
+              mountPath: /app/agent-packs
+            - name: rag-docs
+              mountPath: /app/rag/docs
+      volumes:
+        - name: agent-packs
+          configMap:
+            name: agent-packs-cm
+        - name: rag-docs
+          configMap:
+            name: rag-docs-cm
+---
+# ── VS Agent ──────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vs-agent
+  namespace: eafit-luisgarcia
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vs-agent
+  template:
+    metadata:
+      labels:
+        app: vs-agent
+    spec:
+      containers:
+        - name: vs-agent
+          image: io2060/vs-agent:v1.5.5
+          ports:
+            - containerPort: 3001
+            - containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: chatbot-config
+            - secretRef:
+                name: chatbot-secrets
+---
+# ── Redis ─────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: eafit-luisgarcia
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis/redis-stack-server:latest
+          ports:
+            - containerPort: 6379
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+      volumes:
+        - name: redis-data
+          persistentVolumeClaim:
+            claimName: redis-pvc
+---
+# ── PostgreSQL ────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: eafit-luisgarcia
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:alpine3.19
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: chatbot-config
+                  key: POSTGRES_USER
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: chatbot-config
+                  key: POSTGRES_DB_NAME
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: chatbot-secrets
+                  key: POSTGRES_PASSWORD
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: postgres-pvc
+---
+# ── Artemis ───────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: artemis
+  namespace: eafit-luisgarcia
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: artemis
+  template:
+    metadata:
+      labels:
+        app: artemis
+    spec:
+      containers:
+        - name: artemis
+          image: apache/activemq-artemis:2.31.2
+          ports:
+            - containerPort: 61616
+            - containerPort: 8161
+---
+# ── Persistent Volume Claims ──────────────────────────────────────────────────
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: eafit-luisgarcia
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+  namespace: eafit-luisgarcia
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

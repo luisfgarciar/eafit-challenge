@@ -1,0 +1,68 @@
+metadata:
+  id: eafit-my-agent
+  displayName: My EAFIT Agent
+  description: >-
+    Custom AI agent created for the EAFIT Generative AI Challenge.
+    Powered by Verana + Hologram.
+  defaultLanguage: en
+  tags:
+    - eafit
+    - challenge
+    - hologram
+
+languages:
+  en:
+    greetingMessage: >-
+      Hi! 👋 I'm your EAFIT AI assistant. How can I help you today?
+    systemPrompt: >-
+      You are a friendly and professional AI assistant created for the EAFIT
+      Generative AI Challenge. You answer questions clearly and concisely.
+      When you don't know something, say so honestly.
+    strings:
+      ROOT_TITLE: 'Welcome!'
+      ERROR_MESSAGES: 'Service unavailable. Please try again later.'
+  es:
+    greetingMessage: >-
+      ¡Hola! 👋 Soy tu asistente IA de EAFIT. ¿En qué puedo ayudarte hoy?
+    systemPrompt: >-
+      Eres un asistente IA amigable y profesional creado para el Reto IA
+      Generativa de EAFIT. Respondes preguntas de manera clara y concisa.
+      Cuando no sabes algo, lo dices con honestidad.
+    strings:
+      ROOT_TITLE: '¡Bienvenido!'
+      ERROR_MESSAGES: 'El servicio no está disponible. Intenta más tarde.'
+
+llm:
+  provider: ${LLM_PROVIDER}
+  model: ${ANTHROPIC_MODEL}
+  temperature: 0.3
+  maxTokens: 1000
+
+rag:
+  provider: vectorstore
+  docsPath: ./docs
+  chunkSize: 1000
+  chunkOverlap: 200
+  vectorStore:
+    type: redis
+    indexName: eafit-chatbot
+
+memory:
+  backend: redis
+  window: 8
+  redisUrl: ${REDIS_URL}
+
+flows:
+  welcome:
+    enabled: true
+    sendOnProfile: true
+    templateKey: greetingMessage
+
+integrations:
+  vsAgent:
+    adminUrl: ${VS_AGENT_ADMIN_URL}
+  postgres:
+    host: ${POSTGRES_HOST}
+    user: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+    dbName: ${POSTGRES_DB_NAME}
