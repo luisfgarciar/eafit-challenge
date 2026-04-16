@@ -3,34 +3,72 @@ metadata:
   displayName: My EAFIT Agent
   description: >-
     Custom AI agent created for the EAFIT Generative AI Challenge.
-    Powered by Verana + Hologram.
+    Powered by Verana + Hologram, with blockchain-verified identity and GitHub MCP integration.
   defaultLanguage: en
   tags:
     - eafit
     - challenge
     - hologram
+    - verana
+    - github
 
 languages:
   en:
     greetingMessage: >-
-      Hi! 👋 I'm your EAFIT AI assistant. How can I help you today?
+      Hi! 👋 I'm your EAFIT AI assistant, powered by the Verana ecosystem. I can help you with questions about EAFIT University and assist with GitHub repositories, issues, and pull requests.
     systemPrompt: >-
-      You are a friendly and professional AI assistant created for the EAFIT
-      Generative AI Challenge. You answer questions clearly and concisely.
-      When you don't know something, say so honestly.
+      You are a friendly and professional AI assistant created for the EAFIT Generative AI Challenge,
+      deployed via the Verana ecosystem. You answer questions clearly and concisely about EAFIT University
+      and can help with GitHub tasks using the GitHub MCP integration. When you don't know something, say so honestly.
+      Do not reveal you are an AI.
     strings:
       ROOT_TITLE: 'Welcome!'
-      ERROR_MESSAGES: 'Service unavailable. Please try again later.'
+      LOGOUT: 'Logout'
+      CREDENTIAL: 'Authenticate'
+      WELCOME: 'Welcome! I am your EAFIT AI assistant.'
+      AUTH_REQUIRED: 'Authentication is required to access this feature.'
+      AUTH_SUCCESS: 'Authentication completed successfully. You can now access all features.'
+      AUTH_SUCCESS_NAME: 'Authentication successful. Welcome, {name}! You can now access all features.'
+      WAITING_CREDENTIAL: 'Waiting for you to complete the credential process...'
+      AUTH_PROCESS_STARTED: 'Authentication process has started. Please respond to the credential request.'
+      STATS_ERROR: 'Sorry, we could not retrieve your statistics at the moment.'
+      ERROR_MESSAGES: 'The service is not available at the moment. Please try again later.'
+      LOGOUT_CONFIRMATION: 'You have been logged out successfully.'
+      MCP_CONFIG_MENU: 'MCP Server Config'
+      MCP_CONFIG_ABORT: 'Abort Configuration'
+      MCP_CONFIG_SELECT_SERVER: 'Select the MCP server you want to configure:'
+      MCP_CONFIG_SAVED: '✅ Configuration for "{server}" saved and verified successfully.'
+      MCP_CONFIG_INVALID: '⚠️ Connection test failed for "{server}". The credentials may be invalid. Please try configuring again.'
+      MCP_CONFIG_ERROR: 'An error occurred while saving configuration. Please try again.'
+      MCP_CONFIG_ABORTED: 'Configuration cancelled.'
   es:
     greetingMessage: >-
-      ¡Hola! 👋 Soy tu asistente IA de EAFIT. ¿En qué puedo ayudarte hoy?
+      ¡Hola! 👋 Soy tu asistente IA de EAFIT, impulsado por el ecosistema Verana. Puedo ayudarte con preguntas sobre la Universidad EAFIT y también con repositorios de GitHub, issues y pull requests.
     systemPrompt: >-
-      Eres un asistente IA amigable y profesional creado para el Reto IA
-      Generativa de EAFIT. Respondes preguntas de manera clara y concisa.
-      Cuando no sabes algo, lo dices con honestidad.
+      Eres un asistente IA amigable y profesional creado para el Reto IA Generativa de EAFIT,
+      desplegado mediante el ecosistema Verana. Respondes preguntas sobre la Universidad EAFIT
+      y puedes ayudar con tareas de GitHub usando la integración MCP de GitHub. Cuando no sabes
+      algo, lo dices con honestidad. No reveles que eres una IA.
     strings:
       ROOT_TITLE: '¡Bienvenido!'
-      ERROR_MESSAGES: 'El servicio no está disponible. Intenta más tarde.'
+      LOGOUT: 'Cerrar sesión'
+      CREDENTIAL: 'Autenticar'
+      WELCOME: '¡Bienvenido! Soy tu asistente IA de EAFIT.'
+      AUTH_REQUIRED: 'Se requiere autenticación para acceder a esta función.'
+      AUTH_SUCCESS: 'Autenticación completada con éxito. Ahora puedes acceder a todas las funciones.'
+      AUTH_SUCCESS_NAME: 'Autenticación completada con éxito. ¡Bienvenido, {name}! Ahora puedes acceder a todas las funciones.'
+      WAITING_CREDENTIAL: 'Esperando que completes el proceso de credencial...'
+      AUTH_PROCESS_STARTED: 'El proceso de autenticación ha comenzado. Por favor, responde a la solicitud de credencial.'
+      STATS_ERROR: 'Lo sentimos, no pudimos obtener tus estadísticas en este momento.'
+      ERROR_MESSAGES: 'El servicio no está disponible en este momento. Por favor, intenta de nuevo más tarde.'
+      LOGOUT_CONFIRMATION: 'Has cerrado sesión exitosamente.'
+      MCP_CONFIG_MENU: 'Configurar Servidor MCP'
+      MCP_CONFIG_ABORT: 'Cancelar Configuración'
+      MCP_CONFIG_SELECT_SERVER: 'Selecciona el servidor MCP que deseas configurar:'
+      MCP_CONFIG_SAVED: '✅ Configuración de "{server}" guardada y verificada correctamente.'
+      MCP_CONFIG_INVALID: '⚠️ La prueba de conexión falló para "{server}". Las credenciales pueden ser inválidas. Por favor, intenta configurar de nuevo.'
+      MCP_CONFIG_ERROR: 'Ocurrió un error al guardar la configuración. Por favor, inténtalo de nuevo.'
+      MCP_CONFIG_ABORTED: 'Configuración cancelada.'
 
 llm:
   provider: ${LLM_PROVIDER}
@@ -40,9 +78,7 @@ llm:
 
 rag:
   provider: vectorstore
-  docsPath: ./docs
-  chunkSize: 1000
-  chunkOverlap: 200
+  docsPath: /app/rag/docs
   vectorStore:
     type: redis
     indexName: eafit-chatbot
@@ -57,6 +93,47 @@ flows:
     enabled: true
     sendOnProfile: true
     templateKey: greetingMessage
+  authentication:
+    enabled: true
+    credentialDefinitionId: ${CREDENTIAL_DEFINITION_ID}
+    adminAvatars: []
+  menu:
+    items:
+      - id: authenticate
+        labelKey: CREDENTIAL
+        action: authenticate
+        visibleWhen: unauthenticated
+      - id: logout
+        labelKey: LOGOUT
+        action: logout
+        visibleWhen: authenticated
+      - id: mcp-config
+        labelKey: MCP_CONFIG_MENU
+        action: mcp-config
+        visibleWhen: notConfiguring
+      - id: abort-config
+        labelKey: MCP_CONFIG_ABORT
+        action: abort-config
+        visibleWhen: configuring
+
+mcp:
+  servers:
+    - name: github
+      transport: streamable-http
+      url: ${GITHUB_MCP_URL}
+      headers:
+        Authorization: "Bearer ${GITHUB_PERSONAL_ACCESS_TOKEN}"
+      accessMode: user-controlled
+      userConfig:
+        fields:
+          - name: token
+            type: secret
+            label:
+              en: "Please enter your GitHub Personal Access Token:"
+              es: "Por favor, ingresa tu Token de Acceso Personal de GitHub:"
+            headerTemplate: "Bearer {value}"
+      toolAccess:
+        default: public
 
 integrations:
   vsAgent:
