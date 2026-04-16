@@ -332,18 +332,24 @@ windsurf .  # for Windsurf
 cursor .    # for Cursor
 ```
 
-Navigate to the `ai-chatbot/` directory. This directory contains the chatbot code based on [hologram-generic-ai-agent-vs](https://github.com/2060-io/hologram-generic-ai-agent-vs). You will find:
+Navigate to the `ai-chatbot/` directory. This directory contains the chatbot code with Verana blockchain verification and GitHub MCP integration. You will find:
 
 ```
 ai-chatbot/
-├── agent-packs/           # Declarative agent configurations
-│   └── my-agent/          # Your custom configuration
-│       └── agent-pack.yaml
-├── docs/                  # Documents for RAG (knowledge base)
-├── docker-compose.yml     # Orchestration of all services
-├── .env.example           # Environment variables template
-├── Dockerfile             # To build the chatbot image
-└── README.md              # Chatbot-specific instructions
+├── agent-packs/
+│   └── my-agent/
+│       └── agent-pack.yaml    # Bot personality, prompts, RAG, auth flow, MCP config
+├── common/
+│   └── common.sh              # Verana helpers: Trust Registry, veranad CLI, credentials
+├── docs/                      # Documents for RAG (knowledge base)
+│   ├── eafit-university-en.txt
+│   └── eafit-universidad-es.txt
+├── scripts/
+│   ├── setup.sh               # Verana blockchain setup (veranad account + Service credential)
+│   └── start.sh               # Docker Compose wrapper with env validation
+├── docker-compose.yml         # 7 services: chatbot, vs-agent, redis, postgres, artemis, ollama, adminer
+├── .env.example               # All env vars (LLM + Verana + MCP)
+└── Dockerfile                 # Multi-stage: clones upstream at build time
 ```
 
 ### 1.4. Configure environment variables
@@ -495,10 +501,12 @@ This will start several services:
 
 | Service | Port | Description |
 |---------|------|-------------|
-| **chatbot** | 3000 | Your AI agent (API) |
-| **vs-agent** | 3001 | Communication service with Hologram (DIDComm) |
+| **chatbot** | 3000 | Your AI agent (API + Swagger at `/api`) |
+| **vs-agent** | 3001 / 3002 | DIDComm ↔ Hologram + Verana VT endpoints |
 | **redis** | 6379 | Memory and vector storage |
 | **postgres** | 5432 | Session database |
+| **artemis** | 8161 | Message broker (stats) |
+| **ollama-svr** | 11435 | Local LLM (optional — for Ollama provider) |
 
 > The first time will take a few minutes while Docker images are downloaded.
 

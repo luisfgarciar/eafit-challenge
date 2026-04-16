@@ -6,14 +6,16 @@
 - [x] 1.1. Fork the repository
 - [x] 1.2. Clone the repository
 - [x] 1.3. Explore the project structure
-- [x] 1.4. Configure environment variables (`.env` created, Ollama configured)
-- [x] 1.5. Customize Agent Pack (`llm.model` updated to `${OLLAMA_MODEL}`)
-- [x] 1.6. Add documents for RAG (bilingual docs already in `docs/`)
-- [x] 1.7. Start the chatbot with Docker Compose (pinned to v1.9.0, patched StatProducerService + Ollama RAG)
+- [x] 1.4. Configure environment variables (`.env` created, Anthropic configured)
+- [x] 1.5. Customize Agent Pack (auth flow, MCP GitHub, bilingual menu strings)
+- [x] 1.6. Add documents for RAG (bilingual docs in `docs/`)
+- [x] 1.7. Start the chatbot with Docker Compose (`veranalabs/vs-agent:latest`, did:webvh)
 - [x] 1.8. Expose with ngrok (`https://queasier-jaimie-gravimetrically.ngrok-free.dev` → port 3001)
 - [x] 1.9. Get invitation credentials (`http://localhost:3002/v1/invitation` and `http://localhost:3002/v1/qr`)
 - [x] 1.10. Connect with Hologram and test (QR at `http://localhost:3002/v1/qr`)
-- [x] 1.11. Commit changes
+- [x] 1.11. Add Verana blockchain verification (`common/common.sh`, `scripts/setup.sh`, Service credential)
+- [x] 1.12. Add GitHub MCP integration (user-controlled token via in-chat config)
+- [x] 1.13. Commit changes
 
 ### Step 2 — Kubernetes
 - [ ] Not started
@@ -41,18 +43,23 @@ The challenge has 3 deliverables:
 
 ```
 eafit-challenge/
-├── ai-chatbot/                          # Step 1 — chatbot (hologram-generic-ai-agent-vs based)
+├── ai-chatbot/                          # Step 1 — chatbot with Verana blockchain verification
 │   ├── agent-packs/
 │   │   └── my-agent/
-│   │       └── agent-pack.yaml          # Bot personality, prompts, RAG, memory config
+│   │       └── agent-pack.yaml          # Bot personality, prompts, RAG, auth flow, MCP config
+│   ├── common/
+│   │   └── common.sh                    # Verana helpers: Trust Registry, VT, veranad CLI, credentials
 │   ├── docs/                            # RAG knowledge base documents
-│   │   ├── eafit-university-en.txt      # EAFIT info in English (location, history, contact…)
+│   │   ├── eafit-university-en.txt      # EAFIT info in English
 │   │   └── eafit-universidad-es.txt     # EAFIT info in Spanish
-│   ├── docker-compose.yml               # 5 services: chatbot, vs-agent, redis, postgres, artemis
-│   ├── .env.example                     # All env vars documented (3 LLM options)
-│   ├── .gitignore                       # Ignores .env and data/
+│   ├── scripts/
+│   │   ├── setup.sh                     # Verana blockchain setup (veranad account + Service credential)
+│   │   └── start.sh                     # Docker Compose wrapper with env validation
+│   ├── docker-compose.yml               # 7 services: chatbot, vs-agent, redis, postgres, artemis, ollama, adminer
+│   ├── .env.example                     # All env vars documented (LLM + Verana + MCP)
+│   ├── .gitignore                       # Ignores .env, ids.env, and data/
 │   └── Dockerfile                       # Multi-stage: clones upstream at build time
-├── k8s/                                 # Step 2 — Kubernetes manifests (to be created)
+├── k8s/                                 # Step 2 — Kubernetes manifests
 │   ├── deployment.yaml
 │   ├── service.yaml
 │   ├── ingress.yaml
@@ -67,7 +74,7 @@ eafit-challenge/
     └── deploy.yml
 ```
 
-> `k8s/` and `web-app/` do not exist yet — to be created in Steps 2 and 3.
+> `web-app/` does not exist yet — to be created in Step 3.
 
 ---
 
@@ -77,16 +84,23 @@ eafit-challenge/
 - Runtime: **Node.js v23-alpine** (upstream), **pnpm**
 - Config: `agent-pack.yaml` (YAML, supports `${ENV_VAR}` interpolation at runtime)
 - LLM providers: OpenAI (`gpt-4o-mini`), Anthropic (`claude-haiku-4-5-20251001`), Ollama (`llama3`)
-- Infrastructure: Docker Compose (5 services):
+- Infrastructure: Docker Compose (7 services):
   - `chatbot:3000` — AI agent API (built from local Dockerfile)
-  - `vs-agent:3001` — DIDComm ↔ Hologram (`io2060/vs-agent:v1.5.5`)
+  - `vs-agent:3001/3002` — DIDComm ↔ Hologram + Verana VT endpoints (`veranalabs/vs-agent:latest`)
   - `redis` — memory + vector store (`redis/redis-stack-server:latest`)
   - `postgres:5432` — session storage (`postgres:alpine3.19`)
   - `artemis` — message broker (`apache/activemq-artemis:2.31.2`)
+  - `ollama-svr:11435` — local LLM (`ollama/ollama:latest`)
   - `adminer:8080` — DB UI, dev-only (start with `--profile dev`)
-- Dockerfile: multi-stage, clones upstream at build time (`git clone 2060-io/hologram-generic-ai-agent-vs`)
-- Volumes: `./agent-packs` and `./docs` mounted into container at `/app/agent-packs` and `/app/rag/docs`
-- Tunnel for local dev: **ngrok** (exposes port 3001 to Hologram)
+- Verana integration:
+  - `veranalabs/vs-agent:latest` with `did:webvh` DID (requires `NGROK_DOMAIN`)
+  - `common/common.sh` — Verana Trust Registry, veranad CLI, credential issuance/linking helpers
+  - `scripts/setup.sh` — registers agent on testnet, funds account via faucet, links Service credential
+  - `CREDENTIAL_DEFINITION_ID` — AnonCreds credDef for Avatar-based user authentication
+- MCP: GitHub integration (`https://api.githubcopilot.com/mcp/`) with per-user token config
+- Dockerfile: multi-stage, clones upstream at build time
+- Volumes: `./agent-packs` and `./docs` bind-mounted into container
+- Tunnel for local dev: **ngrok** (exposes port 3001; domain set in `NGROK_DOMAIN`)
 - RAG docs: `docs/eafit-university-en.txt` and `docs/eafit-universidad-es.txt` (bilingual knowledge base)
 
 ### Step 2 — Kubernetes
