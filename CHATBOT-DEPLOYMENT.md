@@ -1,14 +1,15 @@
 # Chatbot Deployment Guide
 
-Local deployment of the EAFIT AI Chatbot using Docker Compose, based on [hologram-generic-ai-agent-vs v1.9.0](https://github.com/2060-io/hologram-generic-ai-agent-vs).
+Local deployment of the EAFIT AI Chatbot using Docker Compose, with Verana blockchain verification and GitHub MCP integration.
 
 ---
 
 ## Prerequisites
 
-- Docker Desktop (with Kubernetes disabled is fine)
+- Docker Desktop
 - ngrok account with authtoken configured (`ngrok config add-authtoken YOUR_TOKEN`)
 - Hologram Messaging app installed on your phone
+- `curl` and `jq` installed (for the Verana setup script)
 
 ---
 
@@ -23,41 +24,59 @@ Edit `.env` and set at minimum:
 
 ```env
 # LLM provider — choose one
-LLM_PROVIDER=ollama
-OLLAMA_ENDPOINT=http://ollama-svr:11434
-OLLAMA_MODEL=llama3
-OLLAMA_EMBEDDING_MODEL=nomic-embed-text
+LLM_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_MODEL=claude-haiku-4-5-20251001
 
-# Stats broker (required — Artemis runs in Docker)
-VS_AGENT_STATS_ENABLED=true
-VS_AGENT_STATS_HOST=artemis
-VS_AGENT_STATS_PORT=61616
-VS_AGENT_STATS_QUEUE=stats-queue
-VS_AGENT_STATS_USER=artemis
-VS_AGENT_STATS_PASSWORD=artemis
-
-# Leave AGENT_ENDPOINT blank for now — fill in after ngrok is running
+# ngrok domain (fill in after step 4)
+NGROK_DOMAIN=your-subdomain.ngrok-free.app
 AGENT_ENDPOINT=https://your-subdomain.ngrok-free.app
 AGENT_ENDPOINTS=https://your-subdomain.ngrok-free.app
 ```
 
-> For OpenAI or Anthropic instead of Ollama, uncomment the corresponding block in `.env` and provide the API key.
+> For OpenAI, uncomment the corresponding block. For Ollama (local/free), uncomment the Ollama block — no API key required.
 
 ---
 
-## Step 2 — Build and start services
+## Step 2 — Start ngrok
+
+In a separate terminal, start the tunnel **before** bringing up the stack — the VS Agent needs the public URL at startup to configure its `did:webvh` DID:
+
+```bash
+ngrok http 3001
+```
+
+Copy the `https://` URL (e.g. `https://abc123.ngrok-free.app`).
+
+Update `.env` with the three ngrok variables:
+
+```env
+NGROK_DOMAIN=abc123.ngrok-free.app
+AGENT_ENDPOINT=https://abc123.ngrok-free.app
+AGENT_ENDPOINTS=https://abc123.ngrok-free.app
+```
+
+---
+
+## Step 3 — Build and start services
+
+```bash
+./scripts/start.sh --build -d
+```
+
+Or directly:
 
 ```bash
 docker compose up --build -d
 ```
 
-This starts 6 services:
+This starts 7 services:
 
 | Service | External port | Description |
 |---------|--------------|-------------|
 | `hologram-generic-ai-agent` | 3000 | AI chatbot API (Swagger UI at `/api`) |
-| `vs-agent` | 3001 | DIDComm inbound — expose via ngrok |
-| `vs-agent` admin | 3002 | QR code / invitation API |
+| `vs-agent` | 3001 | DIDComm inbound — exposed via ngrok |
+| `vs-agent` admin | 3002 | QR code / invitation / Verana admin API |
 | `redis` | 6379 | Memory + vector store |
 | `postgres` | 5432 | Session storage |
 | `artemis` | 8161 | JMS message broker web console |
@@ -71,89 +90,86 @@ docker compose ps
 
 ---
 
-## Step 3 — Pull Ollama models
+## Step 4 — (Ollama only) Pull models
 
-On first run the models are not yet downloaded. Pull them while the stack is running:
+Skip this step if using Anthropic or OpenAI. On first run with Ollama, pull the models:
 
 ```bash
 docker exec ollama-docker ollama pull llama3
 docker exec ollama-docker ollama pull nomic-embed-text
 ```
 
-> `llama3` is used for chat. `nomic-embed-text` is used for RAG document embeddings.  
-> Models are persisted in the `ollama_data` Docker volume and survive restarts. This only needs to be done once.
+> Models are persisted in the `ollama_data` volume — this only needs to be done once.
 
 ---
 
-## Step 4 — Expose vs-agent with ngrok
+## Step 5 — Register on the Verana blockchain
 
-In a separate terminal:
+This step links a **Service credential** to the agent's `did:webvh` DID document, proving the agent is a legitimate service in the Verana ecosystem. Only needs to be done once (or when the ngrok URL changes).
 
 ```bash
-ngrok http 3001
+./scripts/setup.sh
 ```
 
-Copy the `https://` URL shown (e.g. `https://abc123.ngrok-free.app`).
+The script will:
+1. Verify the VS Agent is running and retrieve its `did:webvh` DID
+2. Reuse (or start) the ngrok tunnel
+3. Create a `veranad` CLI account and wait for you to fund it via the testnet faucet
+4. Request a **Service credential** from the EAFIT organization and link it on the DID document
+
+**Funding the account:** The script will print a blockchain address and faucet URL. Open the faucet URL in Hologram and send tokens to the displayed address, then press Enter to continue.
+
+```
+  ┌─────────────────────────────────────────────────────────────┐
+  │  Fund this account via the faucet:                          │
+  │  Address: vna1abc...                                        │
+  │  Faucet:  https://faucet-vs.testnet.verana.network/invitation│
+  └─────────────────────────────────────────────────────────────┘
+  Press Enter once the account is funded...
+```
+
+After completion, resource IDs are saved to `ids.env`.
 
 ---
 
-## Step 5 — Update AGENT_ENDPOINT and restart
-
-Edit `ai-chatbot/.env` and set both variables to the ngrok URL:
-
-```env
-AGENT_ENDPOINT=https://abc123.ngrok-free.app
-AGENT_ENDPOINTS=https://abc123.ngrok-free.app
-```
-
-> `AGENT_ENDPOINTS` (plural) is required by vs-agent v1.5.5+. `AGENT_ENDPOINT` is kept for backwards compatibility but is deprecated.
-
-Restart only the affected services (no rebuild needed):
-
-```bash
-docker compose restart vs-agent chatbot
-```
-
----
-
-## Step 6 — Verify the agent is initialized
+## Step 6 — Verify the agent
 
 ```bash
 curl http://localhost:3002/v1/agent
 ```
 
-Expected response:
+Expected response (with `did:webvh` — confirms Verana mode is active):
 ```json
-{"label":"Test VS Agent","endpoints":["https://abc123.ngrok-free.app"],"isInitialized":true}
+{
+  "label": "EAFIT AI Assistant",
+  "publicDid": "did:webvh:Qm...:your-domain.ngrok-free.app",
+  "isInitialized": true
+}
 ```
 
 ---
 
-## Step 7 — Get the QR code / invitation URL
+## Step 7 — Connect via Hologram
 
-Open your browser and navigate to:
+Get the QR code:
 
 ```
 http://localhost:3002/v1/qr
 ```
 
-This renders the QR code PNG image directly — scan it with Hologram.
-
-> **Do not use `http://localhost:3001/`** — that port is the DIDComm inbound transport used only by Hologram internally via the ngrok tunnel. It has no browser-accessible routes and will return `Cannot GET /`.
-
-Alternatively, get the raw invitation URL as JSON:
+Or the raw invitation URL:
 
 ```bash
 curl http://localhost:3002/v1/invitation
 ```
 
----
-
-## Step 8 — Connect via Hologram
-
 1. Open **Hologram Messaging** on your phone
-2. Open `http://localhost:3002/v1/qr` in your browser and scan the QR code
-3. The bot sends its greeting message — start chatting
+2. Scan the QR code at `http://localhost:3002/v1/qr`
+3. The bot sends its greeting — start chatting
+
+**In-chat features available after Verana setup:**
+- **Authenticate** menu item — users present their Avatar credential
+- **MCP Server Config** — users enter their GitHub Personal Access Token to enable GitHub integration
 
 ---
 
@@ -161,28 +177,26 @@ curl http://localhost:3002/v1/invitation
 
 | URL | What it is |
 |-----|-----------|
-| `http://localhost:3000/api` | Chatbot Swagger UI (REST API docs) |
+| `http://localhost:3000/api` | Chatbot Swagger UI |
 | `http://localhost:3001/` | DIDComm inbound (used by Hologram via ngrok — not for browser) |
-| `http://localhost:3002/v1/agent` | vs-agent status + endpoints |
+| `http://localhost:3002/v1/agent` | VS Agent status + DID |
 | `http://localhost:3002/v1/invitation` | Hologram deep link (JSON) |
 | `http://localhost:3002/v1/qr` | QR code image (PNG) |
 | `http://localhost:8161` | Artemis broker web console |
 
 ---
 
-## When to use `--build` vs `-d`
-
-You do **not** need to rebuild the image on every restart. Use the right command for what changed:
+## When to rebuild vs. restart
 
 | What changed | Command |
 |---|---|
-| `Dockerfile` | `docker compose up --build -d` |
-| `package.json` / Node dependencies | `docker compose up --build -d` |
-| `.env` variables | `docker compose up -d` |
-| `agent-pack.yaml` (prompt, persona, RAG config) | `docker compose restart chatbot` |
-| Files in `docs/` (RAG knowledge base) | `docker compose restart chatbot` |
+| `Dockerfile` or Node dependencies | `docker compose up --build -d` |
+| `.env` variables | `docker compose down && docker compose up -d` |
+| `agent-pack.yaml` (prompt, persona, flows) | `docker compose restart chatbot` |
+| `docs/` (RAG knowledge base) | `docker compose restart chatbot` |
+| ngrok URL changed | Update `.env` → `docker compose down && docker compose up -d` → re-run `./scripts/setup.sh` |
 
-**Why:** `agent-packs/` and `docs/` are bind-mounted into the container — the running process reads them directly from your host filesystem. Changes take effect on the next restart without any image rebuild. Only changes to the image layers (Dockerfile, dependencies, copied source) require `--build`.
+> `agent-packs/` and `docs/` are bind-mounted — changes take effect on restart without a rebuild.
 
 ---
 
@@ -190,21 +204,9 @@ You do **not** need to rebuild the image on every restart. Use the right command
 
 | File | What to change |
 |------|---------------|
-| `agent-packs/my-agent/agent-pack.yaml` | Bot name, greeting, system prompt, languages |
+| `agent-packs/my-agent/agent-pack.yaml` | Bot name, greeting, system prompt, auth flow, MCP servers |
 | `docs/` | Add `.txt`, `.md`, or `.pdf` files for the RAG knowledge base |
-| `.env` | LLM provider, model, ports |
-
-After changing `agent-pack.yaml` or `docs/`, restart without rebuild:
-
-```bash
-docker compose restart chatbot
-```
-
-After changing `Dockerfile` or `.env` LLM settings, rebuild:
-
-```bash
-docker compose up --build -d
-```
+| `.env` | LLM provider, model, Verana service metadata, MCP keys |
 
 ---
 
@@ -223,6 +225,9 @@ docker compose ps
 # Stop everything
 docker compose down
 
-# Stop and wipe volumes (full reset — re-pull Ollama models after this)
+# Stop and wipe volumes (full reset)
 docker compose down -v
+
+# Re-run Verana setup (e.g. after ngrok URL change)
+./scripts/setup.sh
 ```

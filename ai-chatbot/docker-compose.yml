@@ -54,13 +54,22 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-eafit}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-eafit2025}
       POSTGRES_DB_NAME: ${POSTGRES_DB_NAME:-chatbot-agent}
+      # Verana blockchain verification
+      CREDENTIAL_DEFINITION_ID: ${CREDENTIAL_DEFINITION_ID}
+      # MCP integrations
+      GITHUB_MCP_URL: ${GITHUB_MCP_URL:-https://api.githubcopilot.com/mcp/}
+      GITHUB_PERSONAL_ACCESS_TOKEN: ${GITHUB_PERSONAL_ACCESS_TOKEN:-}
+      MCP_CONFIG_ENCRYPTION_KEY: ${MCP_CONFIG_ENCRYPTION_KEY:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - chatbot
     restart: unless-stopped
 
-  # ── VS Agent (DIDComm ↔ Hologram) ─────────────────────────────────────────
+  # ── VS Agent (DIDComm ↔ Hologram + Verana blockchain) ────────────────────
   vs-agent:
-    image: io2060/vs-agent:v1.5.5
+    image: veranalabs/vs-agent:latest
+    platform: linux/amd64
     container_name: vs-agent
     depends_on:
       - postgres
@@ -69,15 +78,21 @@ services:
       - "3001:3001"   # DIDComm / public endpoint (expose via ngrok in dev)
       - "3002:3000"   # vs-agent admin API (QR code, invitation, agent status)
     environment:
-      AGENT_LABEL: ${AGENT_LABEL:-EAFIT AI Assistant}
-      AGENT_ENDPOINTS: ${AGENT_ENDPOINT}        # v1.5.5+ uses AGENT_ENDPOINTS (plural)
-      AGENT_ENDPOINT: ${AGENT_ENDPOINT}         # kept for backwards compatibility
+      AGENT_LABEL: ${AGENT_LABEL:-"EAFIT AI Assistant"}
+      AGENT_PUBLIC_DID: "did:webvh:${NGROK_DOMAIN}"   # enables did:webvh + Verana VT endpoints
+      AGENT_INVITATION_IMAGE_URL: ${SERVICE_LOGO_URL:-}
       EVENTS_BASE_URL: ${EVENTS_BASE_URL:-http://chatbot:3000}
+      USE_CORS: "true"
+      ENABLE_PUBLIC_API_SWAGGER: "true"
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
       POSTGRES_USER: ${POSTGRES_USER:-eafit}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-eafit2025}
       POSTGRES_DB_NAME: ${POSTGRES_DB_NAME:-chatbot-agent}
+    volumes:
+      - vs-agent-data:/root/.afj
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - chatbot
     restart: unless-stopped
@@ -148,6 +163,7 @@ services:
 volumes:
   postgres_data:
   ollama_data:
+  vs-agent-data:
 
 networks:
   chatbot:
