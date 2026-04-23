@@ -1,0 +1,45 @@
+# Secrets & credentials
+ids.env
+*.env
+!.env.example
+kubeconfig*
+*.pem
+*.key
+
+# Node
+node_modules/
+dist/
+build/
+.next/
+.nuxt/
+out/
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+data/
+
+# Prisma
+prisma/migrations/dev.db
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Docker
+docker-volumes/
+
+# Uploads / RAG docs
+web-app/backend/uploads/
+
+CLAUDE.md
